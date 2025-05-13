@@ -1,0 +1,59 @@
+{
+  "ServicePrincipals": {
+    "MicrosoftGraph": {
+      "AppId": "00000003-0000-0000-c000-000000000000",
+      "DisplayName": "Microsoft Graph",
+      "Description": "Microsoft Graph API"
+    },
+    "ExchangeOnline": {
+      "AppId": "00000002-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Office 365 Exchange Online",
+      "Description": "Exchange Online API"
+    },
+    "RightsManagement": {
+      "AppId": "00000012-0000-0000-c000-000000000000",
+      "DisplayName": "Azure Rights Management Services",
+      "Description": "Azure Rights Management Services API"
+    },
+    "MIPSyncService": {
+      "AppId": "870c4f2e-85b6-4d43-bdda-6ed9a579b725",
+      "DisplayName": "Microsoft Information Protection Sync Service",
+      "Description": "Microsoft Information Protection Sync Service API"
+    },
+    "SharePoint": {
+      "AppId": "00000003-0000-0ff1-ce00-000000000000",
+      "DisplayName": "SharePoint Online",
+      "Description": "SharePoint Online API"
+    }
+  },
+  "CommonPermissions": {
+    "MicrosoftGraph": {
+      "Directory": [
+        "Directory.Read.All",
+        "Directory.ReadWrite.All",
+        "Directory.AccessAsUser.All"
+      ],
+      "User": [
+        "User.Read",
+        "User.Read.All",
+        "User.ReadWrite.All"
+      ],
+      "Group": [
+        "Group.Read.All",
+        "Group.ReadWrite.All"
+      ],
+      "Application": [
+        "Application.Read.All",
+        "Application.ReadWrite.All"
+      ]
+    },
+    "RightsManagement": [
+      "Content.SuperUser",
+      "Content.Writer",
+      "UnifiedPolicy.Tenant.Read"
+    ],
+    "ExchangeOnline": [
+      "full_access_as_app"
+    ]
+  }
+}

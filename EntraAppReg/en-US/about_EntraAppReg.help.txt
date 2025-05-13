@@ -1,0 +1,43 @@
+# about_EntraAppReg
+
+## SHORT DESCRIPTION
+PowerShell module for managing Entra ID app registrations
+
+## LONG DESCRIPTION
+The EntraAppReg module provides a comprehensive set of tools for managing app registrations in Microsoft Entra ID (formerly Azure AD).
+
+### Key Features
+
+- Create and manage app registrations
+- Add and manage app credentials (secrets and certificates)
+- Monitor expiring credentials
+- Manage app permissions
+
+## EXAMPLES
+
+### Create a new app registration with Graph permissions
+
+```powershell
+New-EntraAppRegistration -AppName "MyGraphApp" -GraphPermissions @("Directory.Read.All", "User.Read.All")
+```
+
+### Add a client secret to an app
+
+```powershell
+Add-EntraAppSecret -AppName "MyGraphApp" -DisplayName "Production" -ValidityYears 1
+```
+
+### Find apps with expiring credentials
+
+```powershell
+Get-EntraAppExpiringCredentials -DaysToExpiry 30
+```
+
+## NOTES
+
+Requires Microsoft.Graph.Applications and Microsoft.Graph.Authentication modules.
+
+## SEE ALSO
+
+- [Microsoft Graph API Documentation](https://docs.microsoft.com/en-us/graph/api/resources/application)
+- [Entra ID Documentation](https://docs.microsoft.com/en-us/entra/identity/)
