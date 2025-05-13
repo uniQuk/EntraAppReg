@@ -27,6 +27,64 @@ try {
             Write-Host "Failed to update KnownServices configuration." -ForegroundColor Red
         }
         
+        # Test service principal helper functions
+        Write-Host "`nTesting service principal helper functions..." -ForegroundColor Cyan
+        
+        # Test Get-EntraKnownServicePrincipal
+        Write-Host "Testing Get-EntraKnownServicePrincipal..." -ForegroundColor Cyan
+        try {
+            $knownServices = Get-EntraKnownServicePrincipal -Verbose
+            if ($knownServices) {
+                $count = if ($knownServices -is [array]) { $knownServices.Count } else { 1 }
+                Write-Host "Retrieved $count known service(s) successfully." -ForegroundColor Green
+                
+                # Test filtering by name
+                Write-Host "Testing Get-EntraKnownServicePrincipal with name filter..." -ForegroundColor Cyan
+                $graphService = Get-EntraKnownServicePrincipal -ServiceName "Microsoft Graph" -Verbose
+                if ($graphService) {
+                    Write-Host "Retrieved Microsoft Graph service successfully." -ForegroundColor Green
+                } else {
+                    Write-Host "Failed to retrieve Microsoft Graph service." -ForegroundColor Red
+                }
+            } else {
+                Write-Host "No known services found." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "Get-EntraKnownServicePrincipal failed: $_" -ForegroundColor Red
+        }
+        
+        # Test Get-EntraServicePrincipalByName
+        Write-Host "Testing Get-EntraServicePrincipalByName..." -ForegroundColor Cyan
+        try {
+            $spByName = Get-EntraServicePrincipalByName -DisplayName "Microsoft Graph" -Verbose
+            if ($spByName) {
+                Write-Host "Retrieved service principal by name successfully." -ForegroundColor Green
+                Write-Host "   Display Name: $($spByName[0].displayName)" -ForegroundColor Green
+                Write-Host "   App ID: $($spByName[0].appId)" -ForegroundColor Green
+            } else {
+                Write-Host "Failed to retrieve service principal by name." -ForegroundColor Red
+            }
+        } catch {
+            Write-Host "Get-EntraServicePrincipalByName failed: $_" -ForegroundColor Red
+        }
+        
+        # Test Get-EntraServicePrincipalByAppId
+        if ($spByName -and $spByName[0].appId) {
+            Write-Host "Testing Get-EntraServicePrincipalByAppId..." -ForegroundColor Cyan
+            try {
+                $spByAppId = Get-EntraServicePrincipalByAppId -AppId $spByName[0].appId -Verbose
+                if ($spByAppId) {
+                    Write-Host "Retrieved service principal by AppId successfully." -ForegroundColor Green
+                    Write-Host "   Display Name: $($spByAppId.displayName)" -ForegroundColor Green
+                    Write-Host "   App ID: $($spByAppId.appId)" -ForegroundColor Green
+                } else {
+                    Write-Host "Failed to retrieve service principal by AppId." -ForegroundColor Red
+                }
+            } catch {
+                Write-Host "Get-EntraServicePrincipalByAppId failed: $_" -ForegroundColor Red
+            }
+        }
+        
         # Try to disconnect
         Disconnect-EntraGraphSession
         if (-not (Test-EntraGraphConnection)) {
