@@ -72,6 +72,45 @@ if (-not (Test-Path -Path $script:LogPath)) {
         Write-Warning "Failed to create log directory: $_"
     }
 }
+
+# Check if KnownServices configuration needs to be updated
+if (Test-Path -Path $script:KnownServicesPath) {
+    try {
+        # Only check if Test-EntraKnownServicesAge function is available
+        if (Get-Command -Name 'Test-EntraKnownServicesAge' -ErrorAction SilentlyContinue) {
+            if (Test-EntraKnownServicesAge) {
+                Write-Host "The KnownServices configuration is outdated or missing." -ForegroundColor Yellow
+                Write-Host "You can update it using Update-EntraKnownServices function." -ForegroundColor Yellow
+                
+                # Prompt to update if we're in an interactive session
+                if ([System.Environment]::UserInteractive) {
+                    $updateNow = Read-Host "Would you like to update now? (Y/N)"
+                    if ($updateNow -eq "Y" -or $updateNow -eq "y") {
+                        # Only try to update if we have the necessary function and Graph connection
+                        if (Get-Command -Name 'Update-EntraKnownServices' -ErrorAction SilentlyContinue) {
+                            # Try to connect to Graph if not already connected
+                            if (Get-Command -Name 'Connect-EntraGraphSession' -ErrorAction SilentlyContinue) {
+                                if (-not (Get-Command -Name 'Test-EntraGraphConnection' -ErrorAction SilentlyContinue) -or 
+                                    -not (Test-EntraGraphConnection)) {
+                                    Connect-EntraGraphSession
+                                }
+                                # Now try to update
+                                Update-EntraKnownServices
+                            } else {
+                                Write-Warning "Cannot update KnownServices configuration: Connect-EntraGraphSession function not available"
+                            }
+                        } else {
+                            Write-Warning "Cannot update KnownServices configuration: Update-EntraKnownServices function not available"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch {
+        Write-Warning "Failed to check KnownServices configuration age: $_"
+    }
+}
 #EndRegion Module Initialization
 
 # Export public functions

@@ -1,4 +1,9 @@
 {
+  "Metadata": {
+    "LastUpdated": "2025-05-13T12:00:00Z",
+    "RefreshIntervalDays": 30,
+    "AutoRefreshEnabled": true
+  },
   "ServicePrincipals": {
     "MicrosoftGraph": {
       "AppId": "00000003-0000-0000-c000-000000000000",
@@ -55,5 +60,9 @@
     "ExchangeOnline": [
       "full_access_as_app"
     ]
+  },
+  "Configuration": {
+    "IncludeMicrosoftGraph": true,
+    "IncludeCustomApis": false
   }
 }
