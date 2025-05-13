@@ -1,4 +1,85 @@
 {
+  "Configuration": {
+    "IncludeMicrosoftGraph": false,
+    "IncludeCustomApis": false
+  },
+  "Metadata": {
+    "LastUpdated": "2025-05-13T22:23:53.8494940Z",
+    "AutoRefreshEnabled": true,
+    "RefreshIntervalDays": 30
+  },
+  "ServicePrincipals": {
+    "MicrosoftGraph": {
+      "AppId": "00000003-0000-0000-c000-000000000000",
+      "DisplayName": "Microsoft Graph",
+      "Description": "Microsoft Graph API"
+    },
+    "ExchangeOnline": {
+      "AppId": "00000002-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Office 365 Exchange Online",
+      "Description": "Exchange Online API"
+    },
+    "RightsManagement": {
+      "AppId": "00000012-0000-0000-c000-000000000000",
+      "DisplayName": "Azure Rights Management Services",
+      "Description": "Azure Rights Management Services API"
+    },
+    "MIPSyncService": {
+      "AppId": "870c4f2e-85b6-4d43-bdda-6ed9a579b725",
+      "DisplayName": "Microsoft Information Protection Sync Service",
+      "Description": "Microsoft Information Protection Sync Service API"
+    },
+    "SharePoint": {
+      "AppId": "00000003-0000-0ff1-ce00-000000000000",
+      "DisplayName": "SharePoint Online",
+      "Description": "SharePoint Online API"
+    },
+    "SkypeforBusinessOnline": {
+      "AppId": "00000004-0000-0ff1-ce00-000000000000",
+      "Description": "API with ID 00000004-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Skype for Business Online"
+    },
+    "MicrosoftRightsManagementServices": {
+      "AppId": "00000012-0000-0000-c000-000000000000",
+      "Description": "API with ID 00000012-0000-0000-c000-000000000000",
+      "DisplayName": "Microsoft Rights Management Services"
+    },
+    "Office365SharePointOnline": {
+      "AppId": "00000003-0000-0ff1-ce00-000000000000",
+      "Description": "API with ID 00000003-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Office 365 SharePoint Online"
+    },
+    "VivaEngage": {
+      "AppId": "00000005-0000-0ff1-ce00-000000000000",
+      "Description": "API with ID 00000005-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Viva Engage"
+    },
+    "MicrosoftAzureActiveAuthn": {
+      "AppId": "0000001a-0000-0000-c000-000000000000",
+      "Description": "API with ID 0000001a-0000-0000-c000-000000000000",
+      "DisplayName": "MicrosoftAzureActiveAuthn"
+    },
+    "Office365ExchangeOnline": {
+      "AppId": "00000002-0000-0ff1-ce00-000000000000",
+      "Description": "API with ID 00000002-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Office 365 Exchange Online"
+    },
+    "MicrosoftExchangeOnlineProtection": {
+      "AppId": "00000007-0000-0ff1-ce00-000000000000",
+      "Description": "API with ID 00000007-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Microsoft Exchange Online Protection"
+    },
+    "PowerBIService": {
+      "AppId": "00000009-0000-0000-c000-000000000000",
+      "Description": "API with ID 00000009-0000-0000-c000-000000000000",
+      "DisplayName": "Power BI Service"
+    },
+    "WindowsAzureActiveDirectory": {
+      "AppId": "00000002-0000-0000-c000-000000000000",
+      "Description": "API with ID 00000002-0000-0000-c000-000000000000",
+      "DisplayName": "Windows Azure Active Directory"
+    }
+  },
   "CommonPermissions": {
     "MicrosoftGraph": {
       "Directory": [
@@ -117,86 +198,5 @@
       "Application.ReadWrite.All",
       "Application.Read.All"
     ]
-  },
-  "ServicePrincipals": {
-    "MicrosoftGraph": {
-      "AppId": "00000003-0000-0000-c000-000000000000",
-      "DisplayName": "Microsoft Graph",
-      "Description": "Microsoft Graph API"
-    },
-    "ExchangeOnline": {
-      "AppId": "00000002-0000-0ff1-ce00-000000000000",
-      "DisplayName": "Office 365 Exchange Online",
-      "Description": "Exchange Online API"
-    },
-    "RightsManagement": {
-      "AppId": "00000012-0000-0000-c000-000000000000",
-      "DisplayName": "Azure Rights Management Services",
-      "Description": "Azure Rights Management Services API"
-    },
-    "MIPSyncService": {
-      "AppId": "870c4f2e-85b6-4d43-bdda-6ed9a579b725",
-      "DisplayName": "Microsoft Information Protection Sync Service",
-      "Description": "Microsoft Information Protection Sync Service API"
-    },
-    "SharePoint": {
-      "AppId": "00000003-0000-0ff1-ce00-000000000000",
-      "DisplayName": "SharePoint Online",
-      "Description": "SharePoint Online API"
-    },
-    "SkypeforBusinessOnline": {
-      "Description": "API with ID 00000004-0000-0ff1-ce00-000000000000",
-      "AppId": "00000004-0000-0ff1-ce00-000000000000",
-      "DisplayName": "Skype for Business Online"
-    },
-    "MicrosoftRightsManagementServices": {
-      "Description": "API with ID 00000012-0000-0000-c000-000000000000",
-      "AppId": "00000012-0000-0000-c000-000000000000",
-      "DisplayName": "Microsoft Rights Management Services"
-    },
-    "Office365SharePointOnline": {
-      "Description": "API with ID 00000003-0000-0ff1-ce00-000000000000",
-      "AppId": "00000003-0000-0ff1-ce00-000000000000",
-      "DisplayName": "Office 365 SharePoint Online"
-    },
-    "VivaEngage": {
-      "Description": "API with ID 00000005-0000-0ff1-ce00-000000000000",
-      "AppId": "00000005-0000-0ff1-ce00-000000000000",
-      "DisplayName": "Viva Engage"
-    },
-    "MicrosoftAzureActiveAuthn": {
-      "Description": "API with ID 0000001a-0000-0000-c000-000000000000",
-      "AppId": "0000001a-0000-0000-c000-000000000000",
-      "DisplayName": "MicrosoftAzureActiveAuthn"
-    },
-    "Office365ExchangeOnline": {
-      "Description": "API with ID 00000002-0000-0ff1-ce00-000000000000",
-      "AppId": "00000002-0000-0ff1-ce00-000000000000",
-      "DisplayName": "Office 365 Exchange Online"
-    },
-    "MicrosoftExchangeOnlineProtection": {
-      "Description": "API with ID 00000007-0000-0ff1-ce00-000000000000",
-      "AppId": "00000007-0000-0ff1-ce00-000000000000",
-      "DisplayName": "Microsoft Exchange Online Protection"
-    },
-    "PowerBIService": {
-      "Description": "API with ID 00000009-0000-0000-c000-000000000000",
-      "AppId": "00000009-0000-0000-c000-000000000000",
-      "DisplayName": "Power BI Service"
-    },
-    "WindowsAzureActiveDirectory": {
-      "Description": "API with ID 00000002-0000-0000-c000-000000000000",
-      "AppId": "00000002-0000-0000-c000-000000000000",
-      "DisplayName": "Windows Azure Active Directory"
-    }
-  },
-  "Configuration": {
-    "IncludeMicrosoftGraph": false,
-    "IncludeCustomApis": false
-  },
-  "Metadata": {
-    "LastUpdated": "2025-05-13T19:53:24.2977580Z",
-    "RefreshIntervalDays": 30,
-    "AutoRefreshEnabled": true
   }
 }
