@@ -6,6 +6,9 @@
     The Get-EntraKnownServicePrincipal function retrieves information about well-known
     service principals from Entra ID, such as Microsoft Graph, Office 365, etc.
     It uses the KnownServices.json configuration file to identify these service principals.
+    
+    The function can retrieve basic information about service principals or detailed
+    information including their permissions (both application and delegated).
 
 .PARAMETER ServiceName
     The name of the service to retrieve. If not specified, returns all known services.
@@ -16,6 +19,10 @@
 .PARAMETER IncludeServicePrincipal
     When specified, retrieves the full service principal object from Entra ID.
     By default, only the cached information is returned.
+    
+.PARAMETER IncludePermissions
+    When specified, includes detailed permission information (application and delegated permissions)
+    for the service principal(s) in the output.
 
 .EXAMPLE
     Get-EntraKnownServicePrincipal
@@ -28,6 +35,10 @@
 .EXAMPLE
     Get-EntraKnownServicePrincipal -RefreshCache -IncludeServicePrincipal
     Refreshes the KnownServices cache and retrieves all known service principals with their full details.
+    
+.EXAMPLE
+    Get-EntraKnownServicePrincipal -ServiceName "Microsoft Graph" -IncludePermissions
+    Gets information about the Microsoft Graph service principal including its application and delegated permissions.
 
 .NOTES
     This function requires an active connection to the Microsoft Graph API when IncludeServicePrincipal
@@ -43,7 +54,10 @@ function Get-EntraKnownServicePrincipal {
         [switch]$RefreshCache,
 
         [Parameter(Mandatory = $false)]
-        [switch]$IncludeServicePrincipal
+        [switch]$IncludeServicePrincipal,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludePermissions
     )
 
     begin {
@@ -91,66 +105,146 @@ function Get-EntraKnownServicePrincipal {
                 return $null
             }
 
+            # Convert from PSCustomObject to collection of objects with key as a property
+            $servicesList = $services.PSObject.Properties | ForEach-Object {
+                [PSCustomObject]@{
+                    ServiceName = $_.Name
+                    DisplayName = $_.Value.DisplayName
+                    AppId = $_.Value.AppId
+                    Description = $_.Value.Description
+                }
+            }
+            
             # Filter by service name if provided
             if ($ServiceName) {
-                # Convert from PSCustomObject to collection of objects with key as a property
-                $servicesList = $services.PSObject.Properties | ForEach-Object {
-                    [PSCustomObject]@{
-                        ServiceName = $_.Name
-                        DisplayName = $_.Value.DisplayName
-                        AppId = $_.Value.AppId
-                        Description = $_.Value.Description
-                    }
-                }
-                
+                # Try different matching approaches (normalized, case-insensitive)
                 $servicesList = $servicesList | Where-Object { 
                     $_.DisplayName -like "*$ServiceName*" -or 
                     $_.ServiceName -like "*$ServiceName*" -or 
-                    $_.AppId -eq $ServiceName 
+                    $_.AppId -eq $ServiceName -or
+                    $_.DisplayName -replace '\s', '' -like "*$($ServiceName -replace '\s', '')*" -or
+                    $_.ServiceName -replace '\s', '' -like "*$($ServiceName -replace '\s', '')*"
                 }
                 
                 if (-not $servicesList) {
                     Write-Verbose "No known services found matching '$ServiceName'."
                     return $null
                 }
-                $services = $servicesList
-            } else {
-                # Convert from PSCustomObject to collection of objects with key as a property
-                $services = $services.PSObject.Properties | ForEach-Object {
-                    [PSCustomObject]@{
-                        ServiceName = $_.Name
-                        DisplayName = $_.Value.DisplayName
-                        AppId = $_.Value.AppId
-                        Description = $_.Value.Description
-                    }
+                
+                Write-Verbose "Found $($servicesList.Count) service(s) matching '$ServiceName'"
+                foreach ($svc in $servicesList) {
+                    Write-Verbose "  - $($svc.DisplayName) (ServiceName: $($svc.ServiceName), AppId: $($svc.AppId))"
                 }
             }
+            
+            # Services list is now prepared
 
-            # If we need to include full service principal details
-            if ($IncludeServicePrincipal) {
-                $result = @()
-                foreach ($service in $services) {
-                    $servicePrincipal = Get-EntraServicePrincipalByAppId -AppId $service.AppId
-                    
-                    if ($servicePrincipal) {
-                        # Create a custom object that combines our cached data with the service principal
-                        $combinedInfo = [PSCustomObject]@{
-                            ServiceName = $service.ServiceName
-                            DisplayName = $service.DisplayName
-                            AppId = $service.AppId
-                            Description = $service.Description
-                            ServicePrincipal = $servicePrincipal
+            # Build result based on requested information
+            $result = @()
+            foreach ($service in $servicesList) {
+                # Create a combined info object with basic service information
+                $combinedInfo = [PSCustomObject]@{
+                    ServiceName = $service.ServiceName
+                    DisplayName = $service.DisplayName
+                    AppId = $service.AppId
+                    Description = $service.Description
+                }
+                
+                Write-Verbose "Processing service: $($service.DisplayName) (ServiceName: $($service.ServiceName))"
+                
+                # Add permissions if requested
+                if ($IncludePermissions) {
+                    try {
+                        $applicationPermissions = @()
+                        $delegatedPermissions = @() 
+                        $hasPermissionsV2 = $false
+
+                        # Try to get permissions from the new schema (v2.0)
+                        if ($script:KnownServices.Permissions) {
+                            # Get the correct service name key for accessing permissions
+                            $permServiceName = $service.ServiceName
+                            
+                            # Check if this service has permissions data
+                            if ($script:KnownServices.Permissions.PSObject.Properties.Name -contains $permServiceName) {
+                                $hasPermissionsV2 = $true
+                                Write-Verbose "Found v2.0 permissions data for $permServiceName"
+                                
+                                $permissionsData = $script:KnownServices.Permissions.$permServiceName
+                                
+                                # Process application permissions if they exist
+                                if ($permissionsData.PSObject.Properties.Name -contains "Application" -and $permissionsData.Application.PSObject.Properties.Count -gt 0) {
+                                    Write-Verbose "Processing application permissions for $permServiceName"
+                                    $appPerms = $permissionsData.Application
+                                    
+                                    foreach ($permName in $appPerms.PSObject.Properties.Name) {
+                                        $perm = $appPerms.$permName
+                                        $applicationPermissions += [PSCustomObject]@{
+                                            Name = $permName
+                                            Id = $perm.Id
+                                            DisplayName = $perm.DisplayName
+                                            Description = $perm.Description
+                                            AllowedMemberTypes = $perm.AllowedMemberTypes
+                                        }
+                                    }
+                                }
+                                
+                                # Process delegated permissions if they exist
+                                if ($permissionsData.PSObject.Properties.Name -contains "Delegated" -and $permissionsData.Delegated.PSObject.Properties.Count -gt 0) {
+                                    Write-Verbose "Processing delegated permissions for $permServiceName"
+                                    $delPerms = $permissionsData.Delegated
+                                    
+                                    foreach ($permName in $delPerms.PSObject.Properties.Name) {
+                                        $perm = $delPerms.$permName
+                                        $delegatedPermissions += [PSCustomObject]@{
+                                            Name = $permName
+                                            Id = $perm.Id
+                                            DisplayName = $perm.DisplayName
+                                            Description = $perm.Description
+                                            UserConsentDisplayName = $perm.UserConsentDisplayName
+                                            UserConsentDescription = $perm.UserConsentDescription
+                                            Type = $perm.Type
+                                        }
+                                    }
+                                }
+                                
+                                # Add these as separate properties
+                                $combinedInfo | Add-Member -MemberType NoteProperty -Name "ApplicationPermissions" -Value $applicationPermissions -Force
+                                $combinedInfo | Add-Member -MemberType NoteProperty -Name "DelegatedPermissions" -Value $delegatedPermissions -Force
+                            }
                         }
-                        $result += $combinedInfo
+                        
+                        # Fall back to legacy CommonPermissions if new schema not available
+                        if (-not $hasPermissionsV2) {
+                            if ($script:KnownServices.CommonPermissions -and 
+                                $script:KnownServices.CommonPermissions.PSObject.Properties.Name -contains $service.ServiceName) {
+                                Write-Verbose "Using legacy CommonPermissions for $($service.ServiceName)"
+                                $permissionNames = $script:KnownServices.CommonPermissions.$($service.ServiceName)
+                                $combinedInfo | Add-Member -MemberType NoteProperty -Name "Permissions" -Value $permissionNames -Force
+                            } 
+                            else {
+                                $combinedInfo | Add-Member -MemberType NoteProperty -Name "Permissions" -Value @() -Force
+                                Write-Verbose "No permissions found for $($service.ServiceName)"
+                            }
+                        }
+                    }
+                    catch {
+                        Write-Error "Error retrieving permissions for $($service.ServiceName): $_"
+                        $combinedInfo | Add-Member -MemberType NoteProperty -Name "Permissions" -Value @() -Force
                     }
                 }
                 
-                return $result
+                # Add service principal if requested
+                if ($IncludeServicePrincipal) {
+                    $servicePrincipal = Get-EntraServicePrincipalByAppId -AppId $service.AppId
+                    if ($servicePrincipal) {
+                        $combinedInfo | Add-Member -MemberType NoteProperty -Name "ServicePrincipal" -Value $servicePrincipal
+                    }
+                }
+                
+                $result += $combinedInfo
             }
-            else {
-                # Return just the cached information
-                return $services
-            }
+            
+            return $result
         }
         catch {
             Write-Error "Error retrieving known service principals: $_"

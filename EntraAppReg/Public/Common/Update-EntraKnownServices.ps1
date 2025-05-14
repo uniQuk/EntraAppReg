@@ -7,15 +7,21 @@
     service principals and their permissions from the tenant. It then updates the KnownServices.json
     configuration file with this information. The function can be used to keep the module's knowledge
     of available APIs and permissions up to date.
+    
+    The function captures both application permissions (appRoles) and delegated permissions
+    (oauth2PermissionScopes) for each service principal. It stores detailed information about
+    each permission including its ID, display name, description, and other relevant metadata.
 
 .PARAMETER Force
     Forces an update even if the file is not outdated.
 
 .PARAMETER IncludeMicrosoftGraph
     Includes Microsoft Graph permissions in the update. This can add a significant number of permissions.
+    Microsoft Graph has hundreds of permissions, so including it can make the configuration file much larger.
 
 .PARAMETER IncludeCustomApis
     Includes custom APIs (those created within the tenant) in the update.
+    These are APIs that are not published by Microsoft.
 
 .PARAMETER OutputPath
     The path where the updated KnownServices.json file will be saved. If not specified, the default
@@ -75,9 +81,11 @@ function Update-EntraKnownServices {
                 LastUpdated = [DateTime]::UtcNow.ToString("o")
                 RefreshIntervalDays = $RefreshIntervalDays
                 AutoRefreshEnabled = $true
+                Version = "2.0"  # Increment version for the new schema
             }
-            ServicePrincipals = @{}
-            CommonPermissions = @{}
+            ServicePrincipals = @{}  # Basic service principal info
+            Permissions = @{}        # Detailed permission structure (application and delegated)
+            CommonPermissions = @{}  # For backward compatibility
             Configuration = @{
                 IncludeMicrosoftGraph = $IncludeMicrosoftGraph.IsPresent
                 IncludeCustomApis = $IncludeCustomApis.IsPresent
@@ -135,7 +143,7 @@ function Update-EntraKnownServices {
             
             # Query for service principals - use paging because there could be many
             $serviceprincipals = @()
-            $uri = "/v1.0/servicePrincipals?`$filter=$filter&`$select=id,appId,displayName,appRoles,publisherName&`$top=100"
+            $uri = "/v1.0/servicePrincipals?`$filter=$filter&`$select=id,appId,displayName,appRoles,publisherName,oauth2PermissionScopes&`$top=100"
             
             do {
                 $response = Invoke-MgGraphRequest -Uri $uri -Method Get
@@ -153,51 +161,168 @@ function Update-EntraKnownServices {
                 $processedServicePrincipals++
                 Write-Progress -Activity "Processing service principals" -Status "$processedServicePrincipals of $totalServicePrincipals" -PercentComplete (($processedServicePrincipals / $totalServicePrincipals) * 100)
                 
-                # Skip if no app roles (permissions)
-                if (-not $servicePrincipal.appRoles -or $servicePrincipal.appRoles.Count -eq 0) {
-                    continue
-                }
+                # Initialize counters for this service principal
+                $appRoleCount = 0
+                $delegatedPermissionCount = 0
                 
-                # Filter based on configuration options
-                
-                # Skip Microsoft Graph if not requested
-                if (-not $IncludeMicrosoftGraph -and $servicePrincipal.appId -eq "00000003-0000-0000-c000-000000000000") {
-                    continue
+                # Handle Microsoft Graph permissions properly
+                if ($servicePrincipal.appId -eq "00000003-0000-0000-c000-000000000000") {
+                    # Only skip Microsoft Graph if explicitly not requested
+                    if (-not $IncludeMicrosoftGraph) {
+                        Write-Verbose "Skipping Microsoft Graph permissions as requested"
+                        continue
+                    }
+                    else {
+                        Write-Verbose "Including Microsoft Graph permissions as requested"
+                    }
                 }
                 
                 # Filter out non-Microsoft APIs if requested
-                if (-not $IncludeCustomApis -and -not ($servicePrincipal.appId -like "0000*")) {
+                if (-not $IncludeCustomApis -and -not ($servicePrincipal.appId -like "0000*") -and -not ($servicePrincipal.publisherName -like "*Microsoft*")) {
                     continue
                 }
                 
-                # Add to our configuration
+                # Generate service principal key
                 $spKey = $servicePrincipal.displayName -replace '[^\w\d]', ''
                 if ($spKey -eq '') {
                     $spKey = "SP_$($servicePrincipal.id)"
                 }
                 
+                # Add service principal to our configuration
                 $knownServicesConfig.ServicePrincipals[$spKey] = @{
                     AppId = $servicePrincipal.appId
                     DisplayName = $servicePrincipal.displayName
                     Description = if ($servicePrincipal.publisherName) { "API published by $($servicePrincipal.publisherName)" } else { "API with ID $($servicePrincipal.appId)" }
+                    ServicePrincipalId = $servicePrincipal.id
+                    Publisher = $servicePrincipal.publisherName
                 }
                 
-                # Add permissions to CommonPermissions
-                $permissions = @()
-                foreach ($appRole in $servicePrincipal.appRoles) {
-                    if ($appRole.isEnabled) {
-                        $permissions += $appRole.value
-                        $totalPermissions++
+                # Initialize the permissions structure for this service principal if needed
+                if (-not $knownServicesConfig.ContainsKey("Permissions")) {
+                    $knownServicesConfig.Permissions = @{}
+                }
+                
+                # Initialize the permissions for this service principal
+                $knownServicesConfig.Permissions[$spKey] = @{
+                    "Application" = @{}
+                    "Delegated" = @{}
+                }
+                
+                # Process application permissions (appRoles)
+                if ($servicePrincipal.appRoles -and $servicePrincipal.appRoles.Count -gt 0) {
+                    foreach ($appRole in $servicePrincipal.appRoles) {
+                        if ($appRole.isEnabled) {
+                            # Store detailed permission info for app roles
+                            try {
+                                $appRoleName = $appRole.value
+                                if ([string]::IsNullOrEmpty($appRoleName)) {
+                                    # Handle empty role names by using ID instead
+                                    $appRoleName = "role_$($appRole.id)"
+                                }
+                                
+                                $knownServicesConfig.Permissions[$spKey]["Application"][$appRoleName] = @{
+                                    Id = $appRole.id
+                                    DisplayName = $appRole.displayName
+                                    Description = $appRole.description
+                                    AllowedMemberTypes = $appRole.allowedMemberTypes
+                                }
+                                
+                                # Add to simple CommonPermissions for backwards compatibility
+                                if (-not $knownServicesConfig.CommonPermissions.ContainsKey($spKey)) {
+                                    $knownServicesConfig.CommonPermissions[$spKey] = @()
+                                }
+                                $knownServicesConfig.CommonPermissions[$spKey] += $appRoleName
+                            }
+                            catch {
+                                Write-Verbose "Failed to add app role $($appRole.value) to permissions: $_"
+                            }
+                            
+                            $appRoleCount++
+                            $totalPermissions++
+                        }
                     }
                 }
                 
-                if ($permissions.Count -gt 0) {
-                    $knownServicesConfig.CommonPermissions[$spKey] = $permissions
+                # Process delegated permissions (oauth2PermissionScopes)
+                if ($servicePrincipal.oauth2PermissionScopes -and $servicePrincipal.oauth2PermissionScopes.Count -gt 0) {
+                    foreach ($scope in $servicePrincipal.oauth2PermissionScopes) {
+                        if ($scope.isEnabled) {
+                            # Store detailed permission info for delegated permissions
+                            try {
+                                $scopeName = $scope.value
+                                if ([string]::IsNullOrEmpty($scopeName)) {
+                                    # Handle empty scope names by using ID instead
+                                    $scopeName = "scope_$($scope.id)"
+                                }
+                                
+                                $knownServicesConfig.Permissions[$spKey]["Delegated"][$scopeName] = @{
+                                    Id = $scope.id
+                                    DisplayName = $scope.adminConsentDisplayName
+                                    Description = $scope.adminConsentDescription
+                                    UserConsentDisplayName = $scope.userConsentDisplayName
+                                    UserConsentDescription = $scope.userConsentDescription
+                                    Type = $scope.type
+                                }
+                                
+                                # Don't add delegated scopes to CommonPermissions to avoid confusion
+                            }
+                            catch {
+                                Write-Verbose "Failed to add delegated permission $($scope.value) to permissions: $_"
+                            }
+                            
+                            $delegatedPermissionCount++
+                            $totalPermissions++
+                        }
+                    }
+                }
+                
+                # If no permissions were found for this service principal, remove it from the permissions collection
+                if ($appRoleCount -eq 0 -and $delegatedPermissionCount -eq 0) {
+                    if ($knownServicesConfig.Permissions.ContainsKey($spKey)) {
+                        $knownServicesConfig.Permissions.Remove($spKey)
+                    }
+                }
+                else {
+                    Write-Verbose "Found $appRoleCount application and $delegatedPermissionCount delegated permissions for $($servicePrincipal.displayName)"
                 }
             }
             
             Write-Progress -Activity "Processing service principals" -Completed
-            Write-Host "Processed $totalPermissions permissions across $totalServicePrincipals service principals" -ForegroundColor Green
+            
+            # Calculate permission stats
+            $appPermissionCount = 0
+            $delegatedPermissionCount = 0
+            $servicePrincipalsWithPermissions = 0
+            
+            if ($knownServicesConfig.Permissions) {
+                foreach ($key in $knownServicesConfig.Permissions.Keys) {
+                    try {
+                        $spPerms = $knownServicesConfig.Permissions[$key]
+                        
+                        $appCount = if ($spPerms.Application) { $spPerms.Application.Count } else { 0 }
+                        $delegatedCount = if ($spPerms.Delegated) { $spPerms.Delegated.Count } else { 0 }
+                        
+                        if ($appCount -gt 0 -or $delegatedCount -gt 0) {
+                            $servicePrincipalsWithPermissions++
+                            $appPermissionCount += $appCount
+                            $delegatedPermissionCount += $delegatedCount
+                        }
+                    }
+                    catch {
+                        Write-Verbose "Error calculating stats for $key`: $_"
+                    }
+                }
+            }
+            
+            $totalPermissionCount = $appPermissionCount + $delegatedPermissionCount
+            
+            Write-Host "Service Principal Statistics" -ForegroundColor Cyan
+            Write-Host "  Total service principals found: $totalServicePrincipals" -ForegroundColor Green
+            Write-Host "  Service principals with permissions: $servicePrincipalsWithPermissions" -ForegroundColor Green
+            Write-Host "Permission Statistics" -ForegroundColor Cyan  
+            Write-Host "  Application permissions: $appPermissionCount" -ForegroundColor Green
+            Write-Host "  Delegated permissions: $delegatedPermissionCount" -ForegroundColor Green
+            Write-Host "  Total permissions: $totalPermissionCount" -ForegroundColor Green
             
             # Save the updated configuration
             $outputFolder = Split-Path -Path $OutputPath -Parent
@@ -205,7 +330,7 @@ function Update-EntraKnownServices {
                 New-Item -Path $outputFolder -ItemType Directory -Force | Out-Null
             }
             
-            $knownServicesJson = ConvertTo-Json -InputObject $knownServicesConfig -Depth 5
+            $knownServicesJson = ConvertTo-Json -InputObject $knownServicesConfig -Depth 6
             $knownServicesJson | Out-File -FilePath $OutputPath -Force
             
             Write-Host "KnownServices configuration updated successfully at $OutputPath" -ForegroundColor Green
