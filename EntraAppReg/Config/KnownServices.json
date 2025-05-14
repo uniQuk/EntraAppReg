@@ -1,0 +1,89 @@
+{
+  "Metadata": {
+    "LastUpdated": "2025-05-14T00:00:00.000Z",
+    "RefreshIntervalDays": 30,
+    "AutoRefreshEnabled": true,
+    "Version": "2.0"
+  },
+  "ServicePrincipals": {
+    "MicrosoftGraph": {
+      "AppId": "00000003-0000-0000-c000-000000000000",
+      "DisplayName": "Microsoft Graph",
+      "Description": "API published by Microsoft",
+      "ServicePrincipalId": "",
+      "Publisher": "Microsoft Corporation"
+    },
+    "MicrosoftExchangeOnline": {
+      "AppId": "00000002-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Exchange Online",
+      "Description": "API published by Microsoft",
+      "ServicePrincipalId": "",
+      "Publisher": "Microsoft Corporation" 
+    },
+    "MicrosoftRightsManagementServices": {
+      "AppId": "00000012-0000-0000-c000-000000000000",
+      "DisplayName": "Azure Rights Management Services",
+      "Description": "API published by Microsoft",
+      "ServicePrincipalId": "",
+      "Publisher": "Microsoft Corporation"
+    },
+    "AzureKeyVault": {
+      "AppId": "cfa8b339-82a2-471a-a3c9-0fc0be7a4093",
+      "DisplayName": "Azure Key Vault",
+      "Description": "API published by Microsoft",
+      "ServicePrincipalId": "",
+      "Publisher": "Microsoft Corporation"
+    },
+    "MicrosoftSharePoint": {
+      "AppId": "00000003-0000-0ff1-ce00-000000000000",
+      "DisplayName": "Microsoft SharePoint",
+      "Description": "API published by Microsoft",
+      "ServicePrincipalId": "",
+      "Publisher": "Microsoft Corporation"
+    }
+  },
+  "Permissions": {
+    "MicrosoftGraph": {
+      "Application": {
+        "User.Read.All": {
+          "Id": "df021288-bdef-4463-88db-98f22de89214",
+          "DisplayName": "Read all users' full profiles",
+          "Description": "Allows the app to read the full set of profile properties, reports, and managers of other users in your organization, without a signed-in user.",
+          "AllowedMemberTypes": ["Application"]
+        },
+        "Directory.Read.All": {
+          "Id": "7ab1d382-f21e-4acd-a863-ba3e13f7da61",
+          "DisplayName": "Read directory data",
+          "Description": "Allows the app to read data in your organization's directory.",
+          "AllowedMemberTypes": ["Application"]
+        }
+      },
+      "Delegated": {
+        "User.Read": {
+          "Id": "e1fe6dd8-ba31-4d61-89e7-88639da4683d",
+          "DisplayName": "Sign in and read user profile",
+          "Description": "Allows users to sign-in to the app, and allows the app to read the profile of signed-in users.",
+          "UserConsentDisplayName": "Sign in and read your profile",
+          "UserConsentDescription": "Allows you to sign in to the app with your organizational account and let the app read your profile.",
+          "Type": "User"
+        }
+      }
+    }
+  },
+  "CommonPermissions": {
+    "MicrosoftGraph": [
+      "User.Read.All",
+      "Directory.Read.All"
+    ],
+    "MicrosoftExchangeOnline": [
+      "full_access_as_app"
+    ],
+    "MicrosoftRightsManagementServices": [
+      "Content.SuperUser"
+    ]
+  },
+  "Configuration": {
+    "IncludeMicrosoftGraph": true,
+    "IncludeCustomApis": false
+  }
+}
