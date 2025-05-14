@@ -31,6 +31,10 @@
     The number of days after which the KnownServices.json file should be considered outdated.
     Default is 30 days.
 
+.PARAMETER UseNormalizedStorage
+    When specified, updates the normalized KnownServices configuration files instead of the legacy format.
+    The normalized format splits data across multiple files for better performance and reduced storage requirements.
+
 .EXAMPLE
     Update-EntraKnownServices
     Updates the KnownServices.json file if it is outdated.
@@ -43,9 +47,17 @@
     Update-EntraKnownServices -IncludeMicrosoftGraph -IncludeCustomApis
     Updates the KnownServices.json file with all available APIs and permissions.
 
+.EXAMPLE
+    Update-EntraKnownServices -UseNormalizedStorage
+    Updates the normalized KnownServices configuration files instead of the legacy format.
+
 .NOTES
     This function requires an active connection to the Microsoft Graph API with sufficient permissions.
     Use Connect-EntraGraphSession before calling this function.
+    
+    Starting from v3.0, this function can use a normalized storage format that splits data across
+    multiple files for better performance and reduced storage requirements. Use the -UseNormalizedStorage
+    parameter to enable this feature. In a future version, the normalized format will become the default.
 #>
 function Update-EntraKnownServices {
     [CmdletBinding()]
@@ -63,7 +75,10 @@ function Update-EntraKnownServices {
         [string]$OutputPath = $script:KnownServicesPath,
 
         [Parameter(Mandatory = $false)]
-        [int]$RefreshIntervalDays = 30
+        [int]$RefreshIntervalDays = 30,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$UseNormalizedStorage
     )
 
     begin {
@@ -74,6 +89,27 @@ function Update-EntraKnownServices {
             Write-Error "No active Microsoft Graph connection. Please connect using Connect-EntraGraphSession first."
             return $false
         }
+        
+        # If using normalized storage, delegate to the specialized function
+        if ($UseNormalizedStorage) {
+            Write-Verbose "Using normalized storage format"
+            $configPath = Split-Path -Path $OutputPath -Parent
+            $result = Update-EntraNormalizedKnownServices `
+                -ConfigPath $configPath `
+                -Force:$Force `
+                -IncludeMicrosoftGraph:$IncludeMicrosoftGraph `
+                -IncludeCustomApis:$IncludeCustomApis `
+                -RefreshIntervalDays $RefreshIntervalDays `
+                -UpdateLegacyFormat:$false
+            
+            # Output a warning that this will be the default in future versions
+            Write-Warning "Normalized storage format will become the default in a future version. The legacy format will be maintained for backward compatibility."
+            
+            return $result
+        }
+        
+        # Continue with legacy format
+        Write-Verbose "Using legacy storage format"
         
         # Create base structure for the KnownServices configuration
         $knownServicesConfig = @{

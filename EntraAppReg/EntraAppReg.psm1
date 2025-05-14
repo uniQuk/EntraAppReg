@@ -3,12 +3,27 @@
 
 #Region Module Variables
 # Script variables
-$script:ModuleRoot = $PSScriptRoot
+$script:ModuleRootPath = $PSScriptRoot
 $script:ModuleName = (Get-Item $PSCommandPath).BaseName
-$script:ConfigPath = Join-Path -Path $script:ModuleRoot -ChildPath "Config"
+# Default module configuration paths (these will be updated after functions are loaded)
+$script:ConfigPath = Join-Path -Path $script:ModuleRootPath -ChildPath "Config"
 $script:KnownServicesPath = Join-Path -Path $script:ConfigPath -ChildPath "KnownServices.json"
-$script:PublicFunctionsPath = Join-Path -Path $script:ModuleRoot -ChildPath "Public"
-$script:PrivateFunctionsPath = Join-Path -Path $script:ModuleRoot -ChildPath "Private"
+$script:PublicFunctionsPath = Join-Path -Path $script:ModuleRootPath -ChildPath "Public"
+$script:PrivateFunctionsPath = Join-Path -Path $script:ModuleRootPath -ChildPath "Private"
+
+# Initialize KnownServices cache
+$script:KnownServicesCache = @{
+    Index = $null
+    ServicePrincipals = $null
+    PermissionDefinitions = $null
+    ServicePermissionMappings = $null
+    CommonPermissions = $null
+    LegacyFormat = $null
+    LastRefresh = $null
+}
+
+# Initialize storage preference
+$script:KnownServicesPreference = $null
 
 # Module preference variables - can be overridden by user
 $script:LogPath = [System.IO.Path]::Combine($env:TEMP, "EntraAppReg")
@@ -23,8 +38,33 @@ $script:GraphScopes = @("Application.ReadWrite.All")
 #EndRegion Module Variables
 
 #Region Import Functions
-# Import all private functions
-$privateFunctions = Get-ChildItem -Path "$script:PrivateFunctionsPath" -Recurse -Filter "*.ps1" -ErrorAction SilentlyContinue
+# First import core functions that others might depend on
+$coreFunctions = @(
+    "Get-EntraModuleRoot.ps1",
+    "Get-EntraConfigurationPath.ps1"
+)
+
+foreach ($coreFunction in $coreFunctions) {
+    $functionPath = Join-Path -Path "$script:PrivateFunctionsPath" -ChildPath "Common"
+    $functionPath = Join-Path -Path $functionPath -ChildPath $coreFunction
+    if (Test-Path -Path $functionPath) {
+        try {
+            . $functionPath
+            Write-Verbose "Imported core function: $coreFunction"
+        }
+        catch {
+            Write-Error "Failed to import core function ${functionPath}: $_"
+        }
+    }
+    else {
+        Write-Warning "Core function file not found: $functionPath"
+    }
+}
+
+# Import all other private functions
+$privateFunctions = Get-ChildItem -Path "$script:PrivateFunctionsPath" -Recurse -Filter "*.ps1" -ErrorAction SilentlyContinue |
+                    Where-Object { $coreFunctions -notcontains $_.Name }
+
 foreach ($function in $privateFunctions) {
     try {
         . $function.FullName
@@ -51,6 +91,17 @@ foreach ($function in $publicFunctions) {
 #EndRegion Import Functions
 
 #Region Module Initialization
+# Update configuration paths
+if (Get-Command -Name 'Update-EntraConfigurationPaths' -ErrorAction SilentlyContinue) {
+    try {
+        Update-EntraConfigurationPaths
+        Write-Verbose "Updated configuration paths"
+    }
+    catch {
+        Write-Warning "Failed to update configuration paths: $_"
+    }
+}
+
 # Load configuration if exists
 if (Test-Path -Path $script:KnownServicesPath) {
     try {
@@ -111,6 +162,29 @@ if (Test-Path -Path $script:KnownServicesPath) {
         Write-Warning "Failed to check KnownServices configuration age: $_"
     }
 }
+#Region Normalized Storage Initialization
+# Initialize the KnownServices cache and module paths
+if (Get-Command -Name 'Initialize-EntraKnownServicesCache' -ErrorAction SilentlyContinue) {
+    try {
+        Write-Verbose "Initializing EntraKnownServices cache on module load"
+        Initialize-EntraKnownServicesCache
+        
+        # Check if normalized storage is available
+        if (Get-Command -Name 'Test-EntraNormalizedStorageAvailable' -ErrorAction SilentlyContinue) {
+            $normalizedAvailable = Test-EntraNormalizedStorageAvailable
+            if ($normalizedAvailable) {
+                Write-Verbose "Normalized storage format is available"
+            }
+            else {
+                Write-Verbose "Normalized storage format is not available"
+            }
+        }
+    }
+    catch {
+        Write-Warning "Failed to initialize EntraKnownServices cache: $_"
+    }
+}
+#EndRegion Normalized Storage Initialization
 #EndRegion Module Initialization
 
 # Export public functions

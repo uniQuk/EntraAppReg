@@ -12,7 +12,7 @@
 RootModule = 'EntraAppReg.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.1.0'
+ModuleVersion = '0.2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -70,7 +70,15 @@ RequiredModules = @(@{ModuleName = 'Microsoft.Graph.Applications'; ModuleVersion
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = '*'
+FunctionsToExport = @(
+    # Original functions
+    'Get-EntraKnownServicePrincipal'
+    'Update-EntraKnownServices'
+    
+    # Normalized storage functions
+    'Get-EntraNormalizedKnownServicePrincipal'
+    'Update-EntraNormalizedKnownServices'
+)
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -88,7 +96,16 @@ AliasesToExport = @()
 # ModuleList = @()
 
 # List of all files packaged with this module
-FileList = 'EntraAppReg.psm1', 'EntraAppReg.psd1', 'Config\KnownServices.json'
+FileList = @(
+    'EntraAppReg.psm1'
+    'EntraAppReg.psd1'
+    'Config\KnownServices.json'
+    'Config\KnownServicesIndex.json'
+    'Config\ServicePrincipals.json'
+    'Config\PermissionDefinitions.json'
+    'Config\ServicePermissionMappings.json'
+    'Config\CommonPermissions.json'
+)
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
 PrivateData = @{
@@ -108,7 +125,13 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        # ReleaseNotes = ''
+        ReleaseNotes = @'
+v0.2.0
+- Added normalized storage format to improve performance and reduce storage requirements
+- Added new functions: Get-EntraNormalizedKnownServicePrincipal, Update-EntraNormalizedKnownServices
+- Updated existing functions to support both legacy and normalized storage formats
+- Added UseNormalizedStorage parameter to Get-EntraKnownServicePrincipal and Update-EntraKnownServices
+'@
 
         # Prerelease string of this module
         # Prerelease = ''

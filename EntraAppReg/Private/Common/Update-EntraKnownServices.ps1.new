@@ -1,0 +1,228 @@
+# filepath: /Volumes/Kingston2TB/dev-ps-modules/EntraAppReg/EntraAppReg/Private/Common/Update-EntraKnownServices.ps1
+<#
+.SYNOPSIS
+    Updates the KnownServices configuration file with the latest service principals and permissions from the tenant.
+
+.DESCRIPTION
+    The Update-EntraKnownServices function queries the Microsoft Graph API to get the latest 
+    service principals and their permissions from the tenant. It then updates the KnownServices.json
+    configuration file with this information. The function can be used to keep the module's knowledge
+    of available APIs and permissions up to date.
+
+.PARAMETER Force
+    Forces an update even if the file is not outdated.
+
+.PARAMETER IncludeMicrosoftGraph
+    Includes Microsoft Graph permissions in the update. This can add a significant number of permissions.
+
+.PARAMETER IncludeCustomApis
+    Includes custom APIs (those created within the tenant) in the update.
+
+.PARAMETER OutputPath
+    The path where the updated KnownServices.json file will be saved. If not specified, the default
+    configuration path will be used.
+
+.PARAMETER RefreshIntervalDays
+    The number of days after which the KnownServices.json file should be considered outdated.
+    Default is 30 days.
+
+.EXAMPLE
+    Update-EntraKnownServices
+    Updates the KnownServices.json file if it is outdated.
+
+.EXAMPLE
+    Update-EntraKnownServices -Force
+    Updates the KnownServices.json file regardless of its age.
+
+.EXAMPLE
+    Update-EntraKnownServices -IncludeMicrosoftGraph -IncludeCustomApis
+    Updates the KnownServices.json file with all available APIs and permissions.
+
+.NOTES
+    This function requires an active connection to the Microsoft Graph API with sufficient permissions.
+    Use Connect-EntraGraphSession before calling this function.
+#>
+function Update-EntraKnownServices {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $false)]
+        [switch]$Force,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludeMicrosoftGraph,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludeCustomApis,
+
+        [Parameter(Mandatory = $false)]
+        [string]$OutputPath,
+
+        [Parameter(Mandatory = $false)]
+        [int]$RefreshIntervalDays = 30
+    )
+
+    begin {
+        Write-Verbose "Checking if KnownServices configuration needs updating..."
+
+        # Ensure we have an active Graph connection
+        if (-not (Test-EntraGraphConnection)) {
+            Write-Error "No active Microsoft Graph connection. Please connect using Connect-EntraGraphSession first."
+            return $false
+        }
+        
+        # Determine the output path if not specified
+        if (-not $OutputPath) {
+            # Always prefer the user configuration path for writing
+            $userConfigPath = Get-EntraConfigurationPath -ConfigType UserDefault -CreateIfNotExists
+            $OutputPath = Join-Path -Path $userConfigPath -ChildPath "KnownServices.json"
+            Write-Verbose "Using user configuration path for KnownServices: $OutputPath"
+        }
+        
+        # Create base structure for the KnownServices configuration
+        $knownServicesConfig = @{
+            Metadata = @{
+                LastUpdated = [DateTime]::UtcNow.ToString("o")
+                RefreshIntervalDays = $RefreshIntervalDays
+                AutoRefreshEnabled = $true
+            }
+            ServicePrincipals = @{}
+            CommonPermissions = @{}
+            Configuration = @{
+                IncludeMicrosoftGraph = $IncludeMicrosoftGraph.IsPresent
+                IncludeCustomApis = $IncludeCustomApis.IsPresent
+            }
+        }
+
+        # If the file exists, load it to preserve existing data
+        if (Test-Path -Path $OutputPath) {
+            try {
+                $existingConfig = Get-Content -Path $OutputPath -Raw | ConvertFrom-Json -AsHashtable
+
+                # Merge existing data if available
+                if ($existingConfig.ServicePrincipals) {
+                    $knownServicesConfig.ServicePrincipals = $existingConfig.ServicePrincipals
+                }
+                if ($existingConfig.CommonPermissions) {
+                    $knownServicesConfig.CommonPermissions = $existingConfig.CommonPermissions
+                }
+                if ($existingConfig.Configuration) {
+                    # Keep existing configuration but update specific settings
+                    $knownServicesConfig.Configuration = $existingConfig.Configuration
+                    $knownServicesConfig.Configuration.IncludeMicrosoftGraph = $IncludeMicrosoftGraph.IsPresent
+                    $knownServicesConfig.Configuration.IncludeCustomApis = $IncludeCustomApis.IsPresent
+                }
+                if ($existingConfig.Metadata) {
+                    # Keep the refresh interval from existing config if not explicitly specified
+                    if (-not $PSBoundParameters.ContainsKey('RefreshIntervalDays') -and $existingConfig.Metadata.RefreshIntervalDays) {
+                        $knownServicesConfig.Metadata.RefreshIntervalDays = $existingConfig.Metadata.RefreshIntervalDays
+                    }
+                    # Keep the auto-refresh setting
+                    if ($existingConfig.Metadata.AutoRefreshEnabled -is [bool]) {
+                        $knownServicesConfig.Metadata.AutoRefreshEnabled = $existingConfig.Metadata.AutoRefreshEnabled
+                    }
+                }
+
+                Write-Verbose "Loaded existing KnownServices configuration"
+            }
+            catch {
+                Write-Warning "Failed to load existing KnownServices configuration: $_"
+            }
+        }
+    }
+
+    process {
+        try {
+            Write-Host "Fetching service principals from Microsoft Graph API..." -ForegroundColor Cyan
+            
+            # Initialize counters
+            $totalServicePrincipals = 0
+            $totalPermissions = 0
+            $processedServicePrincipals = 0
+            
+            # Build filter
+            $filter = "servicePrincipalType eq 'Application'"
+            
+            # Add filters for Microsoft Graph and custom APIs
+            if (-not $IncludeMicrosoftGraph) {
+                $filter += " and appId ne '00000003-0000-0000-c000-000000000000'"
+            }
+            
+            if (-not $IncludeCustomApis) {
+                # Include only well-known Microsoft APIs (by prefix pattern)
+                $filter += " and startsWith(appId, '0000')"
+            }
+            
+            # Query for service principals - use paging because there could be many
+            $serviceprincipals = @()
+            $uri = "/v1.0/servicePrincipals?`$filter=$filter&`$select=id,appId,displayName,appRoles,publisherName&`$top=100"
+            
+            do {
+                $response = Invoke-MgGraphRequest -Uri $uri -Method Get
+                if ($response.value) {
+                    $serviceprincipals += $response.value
+                    $totalServicePrincipals += $response.value.Count
+                }
+                $uri = $response.'@odata.nextLink'
+            } while ($uri)
+            
+            Write-Host "Found $totalServicePrincipals service principals" -ForegroundColor Green
+            
+            # Process each service principal
+            foreach ($servicePrincipal in $serviceprincipals) {
+                $processedServicePrincipals++
+                Write-Progress -Activity "Processing service principals" -Status "$processedServicePrincipals of $totalServicePrincipals" -PercentComplete (($processedServicePrincipals / $totalServicePrincipals) * 100)
+                
+                # Skip if no app roles (permissions)
+                if (-not $servicePrincipal.appRoles -or $servicePrincipal.appRoles.Count -eq 0) {
+                    continue
+                }
+                
+                # Add to our configuration
+                $spKey = $servicePrincipal.displayName -replace '[^\w\d]', ''
+                if ($spKey -eq '') {
+                    $spKey = "SP_$($servicePrincipal.id)"
+                }
+                
+                $knownServicesConfig.ServicePrincipals[$spKey] = @{
+                    AppId = $servicePrincipal.appId
+                    DisplayName = $servicePrincipal.displayName
+                    Description = if ($servicePrincipal.publisherName) { "API published by $($servicePrincipal.publisherName)" } else { "API with ID $($servicePrincipal.appId)" }
+                }
+                
+                # Add permissions to CommonPermissions
+                $permissions = @()
+                foreach ($appRole in $servicePrincipal.appRoles) {
+                    if ($appRole.isEnabled) {
+                        $permissions += $appRole.value
+                        $totalPermissions++
+                    }
+                }
+                
+                if ($permissions.Count -gt 0) {
+                    $knownServicesConfig.CommonPermissions[$spKey] = $permissions
+                }
+            }
+            
+            Write-Progress -Activity "Processing service principals" -Completed
+            Write-Host "Processed $totalPermissions permissions across $totalServicePrincipals service principals" -ForegroundColor Green
+            
+            # Save the updated configuration
+            $outputFolder = Split-Path -Path $OutputPath -Parent
+            if (-not (Test-Path -Path $outputFolder)) {
+                New-Item -Path $outputFolder -ItemType Directory -Force | Out-Null
+            }
+            
+            $knownServicesJson = ConvertTo-Json -InputObject $knownServicesConfig -Depth 5
+            $knownServicesJson | Out-File -FilePath $OutputPath -Force
+            
+            Write-Host "KnownServices configuration updated successfully at $OutputPath" -ForegroundColor Green
+            return $true
+        }
+        catch {
+            Write-Error "Failed to update KnownServices configuration: $_"
+            return $false
+        }
+    }
+}
+
+Export-ModuleMember -Function Update-EntraKnownServices

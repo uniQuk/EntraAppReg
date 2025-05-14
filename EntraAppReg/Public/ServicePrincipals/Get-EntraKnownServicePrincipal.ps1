@@ -5,7 +5,7 @@
 .DESCRIPTION
     The Get-EntraKnownServicePrincipal function retrieves information about well-known
     service principals from Entra ID, such as Microsoft Graph, Office 365, etc.
-    It uses the KnownServices.json configuration file to identify these service principals.
+    It uses the KnownServices configuration files to identify these service principals.
     
     The function can retrieve basic information about service principals or detailed
     information including their permissions (both application and delegated).
@@ -23,6 +23,10 @@
 .PARAMETER IncludePermissions
     When specified, includes detailed permission information (application and delegated permissions)
     for the service principal(s) in the output.
+    
+.PARAMETER UseNormalizedStorage
+    When specified, uses the normalized KnownServices configuration files instead of the legacy format.
+    The normalized format splits data across multiple files for better performance and reduced storage requirements.
 
 .EXAMPLE
     Get-EntraKnownServicePrincipal
@@ -39,10 +43,18 @@
 .EXAMPLE
     Get-EntraKnownServicePrincipal -ServiceName "Microsoft Graph" -IncludePermissions
     Gets information about the Microsoft Graph service principal including its application and delegated permissions.
+    
+.EXAMPLE
+    Get-EntraKnownServicePrincipal -UseNormalizedStorage -ServiceName "Microsoft Graph" -IncludePermissions
+    Gets information about the Microsoft Graph service principal using the normalized storage format.
 
 .NOTES
     This function requires an active connection to the Microsoft Graph API when IncludeServicePrincipal
     or RefreshCache is specified. Use Connect-EntraGraphSession before calling this function.
+    
+    Starting from v3.0, this function can use a normalized storage format that splits data across
+    multiple files for better performance and reduced storage requirements. Use the -UseNormalizedStorage
+    parameter to enable this feature. In a future version, the normalized format will become the default.
 #>
 function Get-EntraKnownServicePrincipal {
     [CmdletBinding()]
@@ -57,12 +69,39 @@ function Get-EntraKnownServicePrincipal {
         [switch]$IncludeServicePrincipal,
         
         [Parameter(Mandatory = $false)]
-        [switch]$IncludePermissions
+        [switch]$IncludePermissions,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$UseNormalizedStorage
     )
 
     begin {
         Write-Verbose "Getting known service principal information"
 
+        # Determine which storage format to use
+        $configPath = Split-Path -Path $script:KnownServicesPath -Parent
+        
+        # If UseNormalizedStorage is explicitly specified, use it
+        # Otherwise, check for auto-detection if no parameter is specified
+        if ($UseNormalizedStorage -or 
+            ((-not $PSBoundParameters.ContainsKey('UseNormalizedStorage')) -and 
+             (Get-EntraStoragePreference).UseNormalizedStorage)) {
+                 
+            Write-Verbose "Using normalized storage format"
+            
+            $result = Get-EntraNormalizedKnownServicePrincipal `
+                -ServiceName $ServiceName `
+                -RefreshCache:$RefreshCache `
+                -IncludeServicePrincipal:$IncludeServicePrincipal `
+                -IncludePermissions:$IncludePermissions `
+                -ConfigPath $configPath
+            
+            return $result
+        }
+        
+        # Continue with legacy format
+        Write-Verbose "Using legacy storage format"
+        
         # Check if KnownServices.json exists and refresh if needed or requested
         if ($RefreshCache -or -not (Test-Path -Path $script:KnownServicesPath) -or (Test-EntraKnownServicesAge)) {
             Write-Verbose "KnownServices cache needs to be refreshed"
